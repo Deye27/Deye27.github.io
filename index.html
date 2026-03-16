@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Pressure Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        celeste: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            200: '#bae6fd',
+                            300: '#7dd3fc',
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .progress-transition { transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
+    </style>
+</head>
+<body class="bg-celeste-50 text-slate-800 font-sans min-h-screen p-4 md:p-8">
+    <div id="app" class="max-w-5xl mx-auto">
+        
+        <header class="mb-10 text-center">
+            <h1 class="text-4xl font-bold text-celeste-900 mb-2 drop-shadow-sm">🎓 Study Pressure Tracker</h1>
+            <p class="text-celeste-800 opacity-80 mb-6">Il tempo passa, gli esami si avvicinano.</p>
+            
+            <div class="bg-white p-6 rounded-2xl shadow-lg border border-celeste-100 max-w-2xl mx-auto">
+                <h2 class="text-lg font-semibold text-slate-700 mb-2">Livello di Pressione Globale</h2>
+                <div class="h-6 w-full bg-slate-100 rounded-full overflow-hidden shadow-inner">
+                    <div class="h-full progress-transition rounded-full flex items-center justify-end px-2 text-xs font-bold text-white shadow-sm"
+                         :class="pressureColor"
+                         :style="{ width: globalPressure + '%' }">
+                        {{ Math.round(globalPressure) }}%
+                    </div>
+                </div>
+                <p class="text-sm mt-3 text-slate-500 italic">{{ pressureMessage }}</p>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            
+            <div class="md:col-span-1 space-y-6">
+                
+                <div class="bg-white p-6 rounded-2xl shadow-lg border border-celeste-100">
+                    <h3 class="text-lg font-bold text-celeste-900 mb-3">Impostazioni Semestre</h3>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-1">Data Inizio Lezioni</label>
+                        <input type="date" v-model="semesterStartDate" class="w-full p-2 border border-celeste-200 rounded-xl bg-celeste-50 focus:ring-2 focus:ring-celeste-400 outline-none text-slate-700">
+                        <p class="text-xs text-slate-400 mt-2">Le barre calcolano il tempo da questa data.</p>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl shadow-lg border border-celeste-100">
+                    <h3 class="text-xl font-bold text-celeste-900 mb-4">Nuovo Esame</h3>
+                    <form @submit.prevent="addEvent" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">Materia</label>
+                            <select v-model="newEvent.subject" required class="w-full p-2 border border-celeste-200 rounded-xl bg-celeste-50 focus:ring-2 focus:ring-celeste-400 outline-none">
+                                <option v-for="sub in subjects" :value="sub">{{ sub }}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">Tipo</label>
+                            <select v-model="newEvent.type" required class="w-full p-2 border border-celeste-200 rounded-xl bg-celeste-50 focus:ring-2 focus:ring-celeste-400 outline-none">
+                                <option value="Parziale">Parziale</option>
+                                <option value="Scritto">Scritto</option>
+                                <option value="Orale">Orale</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">Data dell'esame</label>
+                            <input type="date" v-model="newEvent.date" required class="w-full p-2 border border-celeste-200 rounded-xl bg-celeste-50 focus:ring-2 focus:ring-celeste-400 outline-none text-slate-700">
+                        </div>
+                        <button type="submit" class="w-full bg-celeste-400 hover:bg-celeste-500 text-white font-bold py-3 px-4 rounded-xl transition-colors shadow-md">
+                            Aggiungi al Tracker
+                        </button>
+                    </form>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl shadow-lg border border-celeste-100">
+                    <h3 class="text-lg font-bold text-celeste-900 mb-4">Aggiungi Materia</h3>
+                    <div class="flex gap-2">
+                        <input type="text" v-model="newSubject" placeholder="Es. Fisica 1" @keyup.enter="addSubject" class="w-full p-2 border border-celeste-200 rounded-xl bg-celeste-50 outline-none focus:ring-2 focus:ring-celeste-400">
+                        <button @click="addSubject" class="bg-slate-700 hover:bg-slate-800 text-white px-4 rounded-xl font-bold transition-colors">+</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="md:col-span-2 space-y-4">
+                <h3 class="text-xl font-bold text-celeste-900 mb-4">Le tue scadenze</h3>
+                
+                <div v-if="processedEvents.length === 0" class="text-center p-10 bg-white rounded-2xl shadow-sm border border-dashed border-celeste-300 text-celeste-800">
+                    Nessun esame in vista. Aggiungine uno per iniziare a monitorare la pressione!
+                </div>
+
+                <div v-for="event in processedEvents" :key="event.id" class="bg-white p-5 rounded-2xl shadow-md border-l-4 border-celeste-400 hover:shadow-lg transition-shadow relative overflow-hidden">
+                    <div class="flex justify-between items-start mb-2 relative z-10">
+                        <div>
+                            <span class="text-xs font-bold uppercase tracking-wider text-celeste-500 bg-celeste-50 px-2 py-1 rounded-md mb-2 inline-block">{{ event.type }}</span>
+                            <h4 class="text-xl font-bold text-slate-800">{{ event.subject }}</h4>
+                        </div>
+                        <button @click="removeEvent(event.id)" class="text-slate-400 hover:text-red-500 transition-colors p-1" title="Rimuovi esame">✕</button>
+                    </div>
+                    
+                    <div class="mt-4 relative z-10">
+                        <div class="flex justify-between text-sm mb-1 font-medium">
+                            <span class="text-slate-500">Inizio Semestre</span>
+                            <span :class="event.daysLeft <= 3 ? 'text-red-500 font-bold' : 'text-celeste-800'">
+                                <span v-if="event.daysLeft > 0">Manca{{ event.daysLeft === 1 ? '' : 'no' }} {{ event.daysLeft }} giorn{{ event.daysLeft === 1 ? 'o' : 'i' }}</span>
+                                <span v-else-if="event.daysLeft === 0" class="text-rose-600 font-bold uppercase">È OGGGI!</span>
+                                <span v-else class="text-slate-400">Passato</span>
+                            </span>
+                        </div>
+                        <div class="h-3 w-full bg-slate-100 rounded-full overflow-hidden shadow-inner">
+                            <div class="h-full progress-transition rounded-full"
+                                 :class="getProgressBarColor(event.percentage)"
+                                 :style="{ width: event.percentage + '%' }">
+                            </div>
+                        </div>
+                        <div class="flex justify-between text-xs text-slate-400 mt-1">
+                            <span>{{ Math.round(event.percentage) }}% tempo trascorso</span>
+                            <span>Data: {{ event.formattedDate }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    semesterStartDate: "2026-02-23", // Data di inizio di default
+                    subjects: ["Analisi Matematica A2", "Geometria", "Algebra", "Laboratorio di Programmazione"],
+                    newSubject: "",
+                    newEvent: {
+                        subject: "Analisi Matematica A2",
+                        type: "Scritto",
+                        date: ""
+                    },
+                    events: []
+                }
+            },
+            mounted() {
+                // CARICAMENTO DATI SALVATI ALL'AVVIO
+                const savedData = localStorage.getItem('studyTrackerData');
+                if (savedData) {
+                    try {
+                        const parsed = JSON.parse(savedData);
+                        if (parsed.semesterStartDate) this.semesterStartDate = parsed.semesterStartDate;
+                        if (parsed.subjects && parsed.subjects.length > 0) this.subjects = parsed.subjects;
+                        if (parsed.events) this.events = parsed.events;
+                    } catch (e) {
+                        console.error("Errore nel caricamento dei dati", e);
+                    }
+                }
+            },
+            watch: {
+                // SALVATAGGIO AUTOMATICO AD OGNI MODIFICA
+                semesterStartDate() { this.saveData(); },
+                subjects: { deep: true, handler() { this.saveData(); } },
+                events: { deep: true, handler() { this.saveData(); } }
+            },
+            computed: {
+                processedEvents() {
+                    const now = new Date().getTime();
+                    const start = new Date(this.semesterStartDate + 'T00:00:00').getTime();
+                    
+                    return this.events.map(event => {
+                        const targetTime = new Date(event.date + 'T23:59:59').getTime();
+                        
+                        // Calcolo giorni rimanenti (da oggi alla data dell'esame)
+                        const timeDiff = targetTime - now;
+                        const daysLeft = Math.ceil(timeDiff / (1000 * 3600 * 24));
+                        
+                        // Calcolo percentuale
+                        let percentage = 0;
+                        if (targetTime > start) {
+                            const totalDuration = targetTime - start;
+                            const timePassed = now - start;
+                            percentage = (timePassed / totalDuration) * 100;
+                        }
+                        
+                        if (percentage > 100) percentage = 100;
+                        if (percentage < 0) percentage = 0;
+
+                        return {
+                            ...event,
+                            daysLeft: daysLeft,
+                            percentage: percentage,
+                            formattedDate: new Date(event.date).toLocaleDateString('it-IT', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })
+                        };
+                    }).sort((a, b) => new Date(a.date) - new Date(b.date));
+                },
+                globalPressure() {
+                    // Prende in considerazione solo gli eventi futuri per la pressione globale
+                    const futureEvents = this.processedEvents.filter(e => e.daysLeft >= 0);
+                    if (futureEvents.length === 0) return 0;
+                    return Math.max(...futureEvents.map(e => e.percentage));
+                },
+                pressureColor() {
+                    if (this.globalPressure < 50) return 'bg-emerald-400';
+                    if (this.globalPressure < 80) return 'bg-amber-400';
+                    return 'bg-rose-500';
+                },
+                pressureMessage() {
+                    if (this.globalPressure === 0) return "Tutto tranquillo. Fatti un tè.";
+                    if (this.globalPressure < 50) return "Sei in vantaggio. Mantieni il ritmo studiando la teoria.";
+                    if (this.globalPressure < 80) return "La pressione sale. Inizia a fare esercizi sui vecchi compiti.";
+                    return "Allarme rosso. Chiudi i social e spingi sugli esercizi!";
+                }
+            },
+            methods: {
+                saveData() {
+                    localStorage.setItem('studyTrackerData', JSON.stringify({
+                        semesterStartDate: this.semesterStartDate,
+                        subjects: this.subjects,
+                        events: this.events
+                    }));
+                },
+                addSubject() {
+                    if (this.newSubject.trim() && !this.subjects.includes(this.newSubject.trim())) {
+                        this.subjects.push(this.newSubject.trim());
+                        this.newEvent.subject = this.newSubject.trim();
+                        this.newSubject = "";
+                    }
+                },
+                addEvent() {
+                    if (this.newEvent.date) {
+                        this.events.push({
+                            id: Date.now(),
+                            subject: this.newEvent.subject,
+                            type: this.newEvent.type,
+                            date: this.newEvent.date
+                        });
+                        this.newEvent.date = ""; // Reset date
+                    }
+                },
+                removeEvent(id) {
+                    if(confirm("Sei sicuro di voler rimuovere questo esame?")) {
+                        this.events = this.events.filter(e => e.id !== id);
+                    }
+                },
+                getProgressBarColor(percentage) {
+                    if (percentage < 60) return 'bg-celeste-300';
+                    if (percentage < 85) return 'bg-amber-400';
+                    return 'bg-rose-500 animate-pulse';
+                }
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html>
